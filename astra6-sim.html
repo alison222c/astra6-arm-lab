@@ -1,0 +1,747 @@
+<meta charset="utf-8">
+<title>Astra 6 Arm Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one-screen workcell — 3D stage on the left, teach-pendant panel on the right; stacks on phones. */
+:root {
+  --bg: #e9ecef; --surface: #f8f9fb; --sunken: #dfe3e8; --fg: #1a2027; --muted: #5a6470; --line: #cdd3da;
+  --accent: #d98200; --accent-ink: #1a1200; --ok: #2b8a57; --bad: #c0392b;
+  --stage: #d6dbe1; --table: #c3c8ce; --floor: #b5bbc2;
+  --display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12161b; --surface: #191e25; --sunken: #0f1317; --fg: #e4e8ec; --muted: #8b95a2; --line: #2a313a;
+  --accent: #f0a23a; --accent-ink: #1a1200; --ok: #4fbf84; --bad: #ef6b5b;
+  --stage: #1a1f26; --table: #2c333b; --floor: #151a1f; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12161b; --surface: #191e25; --sunken: #0f1317; --fg: #e4e8ec; --muted: #8b95a2; --line: #2a313a;
+  --accent: #f0a23a; --accent-ink: #1a1200; --ok: #4fbf84; --bad: #ef6b5b;
+  --stage: #1a1f26; --table: #2c333b; --floor: #151a1f; color-scheme: dark }
+
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; overflow: hidden; }
+.app { height: 100%; display: grid; grid-template-rows: auto 1fr; }
+header { display: flex; align-items: center; gap: 14px; padding-block: 10px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); border-bottom: 1px solid var(--line); background: var(--surface); }
+.brand { font-family: var(--display); font-weight: 700; font-size: 22px; letter-spacing: .02em; text-transform: uppercase; display: flex; align-items: baseline; gap: 8px; }
+.brand b { color: var(--accent); }
+.brand small { font-family: var(--mono); font-size: 11px; font-weight: 400; color: var(--muted); letter-spacing: 0; text-transform: none; }
+.status { margin-left: auto; display: flex; gap: 8px; align-items: center; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); white-space: nowrap; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.pill.run .dot { background: var(--accent); animation: blink 1s infinite; }
+.pill.idle .dot { background: var(--ok); }
+@keyframes blink { 50% { opacity: .25 } }
+
+main { display: grid; grid-template-columns: minmax(0, 1fr) 400px; min-height: 0; }
+.stage { position: relative; min-height: 0; background: var(--stage); overflow: hidden; }
+.stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.labels { position: absolute; inset: 0; pointer-events: none; }
+.tag { position: absolute; transform: translate(-50%, -100%); font-family: var(--mono); font-size: 11px; padding: 2px 6px; border-radius: 4px; background: color-mix(in srgb, var(--surface) 85%, transparent); color: var(--fg); border: 1px solid var(--line); white-space: nowrap; }
+.tag.held { border-color: var(--accent); color: var(--accent); }
+.camframe { position: absolute; right: 12px; bottom: 12px; border: 1px solid var(--line); border-radius: 6px; pointer-events: none; }
+.camframe span { position: absolute; left: 6px; top: 4px; font-family: var(--mono); font-size: 10px; letter-spacing: .08em; color: #fff; background: rgba(0,0,0,.45); padding: 1px 5px; border-radius: 3px; }
+.stage-tools { position: absolute; left: 12px; top: 12px; display: flex; gap: 6px; flex-wrap: wrap; }
+
+.panel { display: grid; grid-template-rows: auto 1fr auto; min-height: 0; border-left: 1px solid var(--line); background: var(--surface); }
+.section-h { font-family: var(--display); font-weight: 600; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.joints { padding: 12px 16px; border-bottom: 1px solid var(--line); display: grid; gap: 8px; }
+.jgrid { display: grid; grid-template-columns: repeat(6, 1fr) auto; gap: 6px; }
+.j { background: var(--sunken); border-radius: 6px; padding: 6px 4px 5px; text-align: center; }
+.j i { display: block; font-style: normal; font-family: var(--display); font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .06em; }
+.j output { font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+.j.grip { padding-inline: 8px; }
+.log { overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.msg { display: grid; gap: 6px; min-width: 0; }
+.msg .who { font-family: var(--display); font-size: 12px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); display: flex; gap: 8px; align-items: baseline; }
+.msg .who em { font-style: normal; font-family: var(--mono); font-size: 10px; letter-spacing: 0; text-transform: none; }
+.msg.user .text { background: var(--fg); color: var(--surface); padding: 8px 11px; border-radius: 10px 10px 2px 10px; justify-self: end; max-width: 90%; }
+.msg.user .who { justify-content: flex-end; }
+.msg.bot .text { line-height: 1.45; }
+.plan { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.plan li { display: grid; grid-template-columns: 18px 1fr; gap: 8px; align-items: start; font-family: var(--mono); font-size: 12.5px; padding: 6px 8px; border-radius: 6px; background: var(--sunken); color: var(--muted); }
+.plan li::before { content: "○"; text-align: center; }
+.plan li.run { color: var(--fg); outline: 1px solid var(--accent); }
+.plan li.run::before { content: "▸"; color: var(--accent); }
+.plan li.done { color: var(--fg); }
+.plan li.done::before { content: "✓"; color: var(--ok); }
+.plan li.fail { color: var(--bad); }
+.plan li.fail::before { content: "✕"; }
+.plan li small { display: block; color: var(--bad); font-size: 11.5px; margin-top: 2px; }
+.empty { color: var(--muted); font-size: 14px; line-height: 1.5; }
+
+.cmd { border-top: 1px solid var(--line); padding: 12px 16px 14px; display: grid; gap: 10px; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { font: 500 12.5px var(--body); color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; cursor: pointer; }
+.chip:hover { border-color: var(--accent); }
+form { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+textarea { font: 15px/1.4 var(--body); color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; resize: none; min-height: 44px; }
+textarea:focus-visible, button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.btn { font: 600 14px var(--display); letter-spacing: .08em; text-transform: uppercase; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); padding: 0 14px; cursor: pointer; min-height: 36px; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.stop { color: var(--bad); }
+.btn:disabled { opacity: .45; cursor: default; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.row label { display: flex; gap: 6px; align-items: center; }
+select, input[type=range] { accent-color: var(--accent); }
+select { font: 13px var(--body); color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; }
+.stage-tools .btn { background: color-mix(in srgb, var(--surface) 88%, transparent); min-height: 30px; font-size: 13px; padding: 0 10px; }
+
+@media (max-width: 860px) {
+  body { overflow: auto; }
+  .app { height: auto; min-height: 100%; }
+  main { grid-template-columns: 1fr; }
+  .stage { height: 52vh; min-height: 300px; }
+  .panel { border-left: 0; border-top: 1px solid var(--line); }
+  .log { max-height: 46vh; }
+  .status .pill:not(.state) { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .pill.run .dot { animation: none; } }
+</style>
+
+<div class="app">
+  <header>
+    <div class="brand"><span>Astra <b>6</b> Arm Lab</span><small>6-DOF · parallel gripper · tabletop sim</small></div>
+    <div class="status">
+      <span class="pill" id="brainPill"><span class="dot"></span><span id="brainTxt">Built-in parser</span></span>
+      <span class="pill state idle" id="statePill"><span class="dot"></span><span id="stateTxt">Idle</span></span>
+    </div>
+  </header>
+  <main>
+    <div class="stage" id="stage">
+      <canvas id="cv"></canvas>
+      <div class="labels" id="labels"></div>
+      <div class="camframe" id="camframe"><span>WRIST CAM</span></div>
+      <div class="stage-tools">
+        <button class="btn" id="btnReset" type="button">Reset scene</button>
+        <button class="btn" id="btnShuffle" type="button">Shuffle</button>
+        <button class="btn" id="btnLabels" type="button" aria-pressed="true">Labels</button>
+      </div>
+    </div>
+    <aside class="panel">
+      <div class="joints">
+        <div class="section-h">Joint state (deg)</div>
+        <div class="jgrid" id="jgrid"></div>
+      </div>
+      <div class="log" id="log" aria-live="polite">
+        <div class="empty" id="emptyNote">Tell the arm what to do in plain language. It turns your words into pick, place, stack and point actions, then runs them in the cell on the left. Drag to orbit, scroll to zoom.</div>
+      </div>
+      <div class="cmd">
+        <div class="chips" id="chips"></div>
+        <form id="form">
+          <textarea id="cmd" rows="2" placeholder="e.g. Put the red cube in the left bin"></textarea>
+          <div style="display:grid;gap:6px">
+            <button class="btn primary" id="btnRun" type="submit">Run</button>
+            <button class="btn stop" id="btnStop" type="button" disabled>Stop</button>
+          </div>
+        </form>
+        <div class="row">
+          <label for="brain">Interpreter
+            <select id="brain"><option value="auto">Claude when available</option><option value="local">Built-in parser only</option></select>
+          </label>
+          <label for="speed">Speed <input id="speed" type="range" min="0.4" max="3" step="0.1" value="1.2"></label>
+        </div>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(() => {
+// ---------- Kinematics (meters, radians) ----------
+const H = 0.22, L2 = 0.34, L3 = 0.30, D6 = 0.17, J4_AT = 0.12;
+const HOME = [0, 1.4, -2.4, 0, -0.57, 0];
+const LIMITS = [[-2.9, 2.9], [-0.2, 2.6], [-2.8, 0.2], [-2.9, 2.9], [-2.2, 2.2], [-3.1, 3.1]];
+const GRIP_MAX = 0.08;
+
+// Tool pointing straight down; returns joint vector or null when out of reach.
+function ik(x, y, z, yaw = 0) {
+  const q1 = Math.atan2(-z, x);
+  const r = Math.hypot(x, z);
+  const zw = y + D6 - H;
+  const D = (r * r + zw * zw - L2 * L2 - L3 * L3) / (2 * L2 * L3);
+  if (D > 0.999 || D < -0.999) return null;
+  const q3 = -Math.acos(D);
+  const q2 = Math.atan2(zw, r) - Math.atan2(L3 * Math.sin(q3), L2 + L3 * Math.cos(q3));
+  const q5 = -Math.PI / 2 - q2 - q3;
+  let q6 = q1 - yaw;
+  while (q6 > Math.PI / 4) q6 -= Math.PI / 2;
+  while (q6 < -Math.PI / 4) q6 += Math.PI / 2;
+  const q = [q1, q2, q3, 0, q5, q6];
+  for (let i = 0; i < 6; i++) if (q[i] < LIMITS[i][0] || q[i] > LIMITS[i][1]) return null;
+  return q;
+}
+
+// ---------- Theme ----------
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const col = n => new THREE.Color(css(n) || "#888");
+
+// ---------- Renderer & scene ----------
+const stage = document.getElementById("stage");
+const canvas = document.getElementById("cv");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(40, 1, 0.01, 20);
+camera.position.set(1.7, 1.25, 0.25);
+const controls = new THREE.OrbitControls(camera, canvas);
+controls.target.set(0.22, 0.12, 0);
+controls.enableDamping = true;
+controls.maxPolarAngle = Math.PI * 0.49;
+controls.minDistance = 0.5; controls.maxDistance = 3;
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 0.75));
+const sun = new THREE.DirectionalLight(0xffffff, 0.85);
+sun.position.set(1.2, 2.2, 0.8);
+sun.castShadow = true;
+sun.shadow.mapSize.set(1024, 1024);
+Object.assign(sun.shadow.camera, { left: -1, right: 1, top: 1, bottom: -1, near: 0.5, far: 5 });
+scene.add(sun);
+
+const tableMat = new THREE.MeshStandardMaterial({ roughness: 0.85 });
+const table = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.04, 1.4), tableMat);
+table.position.set(0.3, -0.02, 0); table.receiveShadow = true; scene.add(table);
+const floorMat = new THREE.MeshStandardMaterial({ roughness: 1 });
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(12, 12), floorMat);
+floor.rotation.x = -Math.PI / 2; floor.position.y = -0.75; scene.add(floor);
+const grid = new THREE.GridHelper(1.4, 14, 0x888888, 0x888888);
+grid.position.set(0.3, 0.001, 0); grid.material.transparent = true; grid.material.opacity = 0.18; scene.add(grid);
+// reach envelope ring
+const ring = new THREE.Mesh(new THREE.RingGeometry(0.615, 0.62, 96, 1, -Math.PI * 0.62, Math.PI * 1.24),
+  new THREE.MeshBasicMaterial({ color: 0xd98200, transparent: true, opacity: 0.5, side: THREE.DoubleSide }));
+ring.rotation.x = -Math.PI / 2; ring.rotation.z = 0; ring.position.y = 0.002; scene.add(ring);
+
+function applyTheme() {
+  scene.background = col("--stage");
+  tableMat.color = col("--table");
+  floorMat.color = col("--floor");
+  ring.material.color = col("--accent");
+}
+applyTheme();
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme);
+new MutationObserver(applyTheme).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+// ---------- Robot model ----------
+const shell = new THREE.MeshStandardMaterial({ color: 0xeef0f2, roughness: 0.45, metalness: 0.1 });
+const dark = new THREE.MeshStandardMaterial({ color: 0x2a3038, roughness: 0.5, metalness: 0.3 });
+const amber = new THREE.MeshStandardMaterial({ color: 0xe08a00, roughness: 0.4 });
+const steel = new THREE.MeshStandardMaterial({ color: 0x9aa3ad, roughness: 0.3, metalness: 0.8 });
+function mesh(geo, mat) { const m = new THREE.Mesh(geo, mat); m.castShadow = true; m.receiveShadow = true; return m; }
+function cylX(r, len, mat, x0 = 0) { const m = mesh(new THREE.CylinderGeometry(r, r, len, 28), mat); m.rotation.z = Math.PI / 2; m.position.x = x0 + len / 2; return m; }
+function cylZ(r, len, mat) { const m = mesh(new THREE.CylinderGeometry(r, r, len, 28), mat); m.rotation.x = Math.PI / 2; return m; }
+
+const base = new THREE.Group(); scene.add(base);
+const pedestal = mesh(new THREE.CylinderGeometry(0.09, 0.1, 0.06, 36), dark); pedestal.position.y = 0.03; base.add(pedestal);
+const J = [];
+J[0] = new THREE.Group(); J[0].position.y = 0.06; base.add(J[0]);
+const turret = mesh(new THREE.CylinderGeometry(0.07, 0.075, 0.12, 36), shell); turret.position.y = 0.06; J[0].add(turret);
+const turretRing = mesh(new THREE.CylinderGeometry(0.076, 0.076, 0.012, 36), amber); turretRing.position.y = 0.005; J[0].add(turretRing);
+J[1] = new THREE.Group(); J[1].position.y = H - 0.06; J[0].add(J[1]);
+J[1].add(cylZ(0.058, 0.13, dark));
+J[1].add(cylX(0.036, L2, shell));
+J[2] = new THREE.Group(); J[2].position.x = L2; J[1].add(J[2]);
+J[2].add(cylZ(0.048, 0.11, dark));
+J[2].add(cylX(0.031, J4_AT, shell));
+J[3] = new THREE.Group(); J[3].position.x = J4_AT; J[2].add(J[3]);
+J[3].add(cylX(0.034, 0.016, amber, -0.008));
+J[3].add(cylX(0.028, L3 - J4_AT, shell));
+J[4] = new THREE.Group(); J[4].position.x = L3 - J4_AT; J[3].add(J[4]);
+J[4].add(cylZ(0.036, 0.08, dark));
+J[5] = new THREE.Group(); J[4].add(J[5]);
+J[5].add(cylX(0.03, 0.05, dark, 0.02));
+J[5].add(cylX(0.031, 0.008, amber, 0.068));
+const palm = mesh(new THREE.BoxGeometry(0.035, 0.045, 0.1), steel); palm.position.x = 0.094; J[5].add(palm);
+const fingers = [0, 1].map(() => { const f = mesh(new THREE.BoxGeometry(0.075, 0.028, 0.012), dark); f.position.x = 0.148; J[5].add(f); return f; });
+const tcp = new THREE.Object3D(); tcp.position.x = D6; J[5].add(tcp);
+const wristCam = new THREE.PerspectiveCamera(62, 4 / 3, 0.01, 5);
+wristCam.position.set(0.085, 0.04, 0); wristCam.rotation.set(0, -Math.PI / 2, 0); J[5].add(wristCam);
+const camBody = mesh(new THREE.BoxGeometry(0.03, 0.022, 0.022), dark); camBody.position.set(0.075, 0.036, 0); J[5].add(camBody);
+
+let q = HOME.slice(), grip = GRIP_MAX;
+function applyJoints() {
+  J[0].rotation.y = q[0]; J[1].rotation.z = q[1]; J[2].rotation.z = q[2];
+  J[3].rotation.x = q[3]; J[4].rotation.z = q[4]; J[5].rotation.x = q[5];
+  fingers[0].position.z = grip / 2 + 0.006; fingers[1].position.z = -grip / 2 - 0.006;
+}
+applyJoints();
+
+// ---------- World objects ----------
+const DEFS = [
+  { id: "red_cube", name: "red cube", color: "red", shape: "cube", hex: 0xd23b30 },
+  { id: "blue_cube", name: "blue cube", color: "blue", shape: "cube", hex: 0x2f6fd6 },
+  { id: "green_cube", name: "green cube", color: "green", shape: "cube", hex: 0x2f9e57 },
+  { id: "yellow_cylinder", name: "yellow cylinder", color: "yellow", shape: "cylinder", hex: 0xe8b818 },
+  { id: "purple_ball", name: "purple ball", color: "purple", shape: "ball", hex: 0x8a4fd0 },
+];
+const START = {
+  red_cube: [0.42, 0.13, 0.3], blue_cube: [0.52, -0.06, -0.4], green_cube: [0.32, -0.19, 0.7],
+  yellow_cylinder: [0.36, 0.01, 0], purple_ball: [0.5, 0.22, 0],
+};
+const BINS = [
+  { id: "left_bin", name: "left bin", x: 0.17, z: 0.43, hex: 0x2a8a8a },
+  { id: "right_bin", name: "right bin", x: 0.17, z: -0.43, hex: 0xb07a3a },
+];
+const BIN_W = 0.17, BIN_WALL = 0.055, BIN_FLOOR = 0.012;
+const objs = {};
+for (const d of DEFS) {
+  const mat = new THREE.MeshStandardMaterial({ color: d.hex, roughness: 0.5 });
+  let geo, half, width;
+  if (d.shape === "cube") { geo = new THREE.BoxGeometry(0.05, 0.05, 0.05); half = 0.025; width = 0.05; }
+  else if (d.shape === "cylinder") { geo = new THREE.CylinderGeometry(0.024, 0.024, 0.07, 32); half = 0.035; width = 0.048; }
+  else { geo = new THREE.SphereGeometry(0.028, 32, 20); half = 0.028; width = 0.056; }
+  const m = mesh(geo, mat);
+  m.userData = { ...d, half, width, kind: "object" };
+  scene.add(m); objs[d.id] = m;
+}
+for (const b of BINS) {
+  const g = new THREE.Group(); g.position.set(b.x, 0, b.z);
+  const mat = new THREE.MeshStandardMaterial({ color: b.hex, roughness: 0.7 });
+  const fl = mesh(new THREE.BoxGeometry(BIN_W, BIN_FLOOR, BIN_W), mat); fl.position.y = BIN_FLOOR / 2; g.add(fl);
+  for (const [sx, sz, w, d] of [[1, 0, 0.008, BIN_W], [-1, 0, 0.008, BIN_W], [0, 1, BIN_W, 0.008], [0, -1, BIN_W, 0.008]]) {
+    const wall = mesh(new THREE.BoxGeometry(w, BIN_WALL, d), mat);
+    wall.position.set(sx * (BIN_W / 2 - 0.004), BIN_WALL / 2, sz * (BIN_W / 2 - 0.004)); g.add(wall);
+  }
+  g.userData = { ...b, kind: "bin" };
+  scene.add(g); b.group = g;
+}
+const binById = Object.fromEntries(BINS.map(b => [b.id, b]));
+let held = null;
+
+function setObj(id, x, z, yaw) {
+  const o = objs[id];
+  o.position.set(x, o.userData.half, z);
+  o.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+}
+function resetScene() {
+  if (held) { scene.attach(held); held = null; }
+  for (const id in START) setObj(id, ...START[id]);
+}
+function shuffleScene() {
+  if (held) { scene.attach(held); held = null; }
+  const placed = [];
+  for (const id in objs) {
+    for (let tries = 0; tries < 200; tries++) {
+      const r = 0.3 + Math.random() * 0.24, a = (Math.random() - 0.5) * 1.6;
+      const x = r * Math.cos(a), z = -r * Math.sin(a);
+      if (placed.some(p => Math.hypot(p[0] - x, p[1] - z) < 0.09)) continue;
+      if (BINS.some(b => Math.hypot(b.x - x, b.z - z) < 0.16)) continue;
+      placed.push([x, z]); setObj(id, x, z, Math.random() * Math.PI); break;
+    }
+  }
+}
+resetScene();
+
+// ---------- Scene queries ----------
+const yawOf = o => { const v = new THREE.Vector3(1, 0, 0).applyQuaternion(o.quaternion); return Math.atan2(-v.z, v.x); };
+const top = o => o.position.y + o.userData.half;
+function supportOf(o) {
+  for (const id in objs) {
+    const s = objs[id];
+    if (s === o || s === held) continue;
+    if (Math.hypot(s.position.x - o.position.x, s.position.z - o.position.z) < 0.04 && Math.abs(o.position.y - o.userData.half - top(s)) < 0.012) return s.userData.id;
+  }
+  for (const b of BINS) if (Math.abs(o.position.x - b.x) < BIN_W / 2 && Math.abs(o.position.z - b.z) < BIN_W / 2) return b.id;
+  return "table";
+}
+const onTopOf = o => Object.values(objs).filter(s => s !== o && s !== held && supportOf(s) === o.userData.id);
+const inBin = binId => Object.values(objs).filter(s => s !== held && supportOf(s) === binId);
+function restHeight(x, z, o) {
+  let y = 0;
+  for (const b of BINS) if (Math.abs(x - b.x) < BIN_W / 2 && Math.abs(z - b.z) < BIN_W / 2) y = BIN_FLOOR;
+  for (const id in objs) {
+    const s = objs[id]; if (s === o || s === held) continue;
+    if (Math.hypot(s.position.x - x, s.position.z - z) < 0.045) y = Math.max(y, top(s));
+  }
+  return y;
+}
+const SPOTS = { left: [0.36, 0.3], right: [0.36, -0.3], center: [0.42, 0], front: [0.56, 0], back: [0.26, 0] };
+function freeSpot(x0, z0, o) {
+  const offs = [[0, 0]];
+  for (let k = 1; k <= 3; k++) for (let a = 0; a < 8; a++) offs.push([Math.cos(a * Math.PI / 4) * 0.07 * k, Math.sin(a * Math.PI / 4) * 0.07 * k]);
+  for (const [dx, dz] of offs) {
+    const x = x0 + dx, z = z0 + dz;
+    if (!Object.values(objs).some(s => s !== o && s !== held && Math.hypot(s.position.x - x, s.position.z - z) < 0.07)) return [x, z];
+  }
+  return [x0, z0];
+}
+
+function describeScene() {
+  const lines = Object.values(objs).map(o => {
+    const u = o.userData;
+    if (o === held) return `- ${u.id}: ${u.name} (${u.shape}), currently held in the gripper`;
+    const on = supportOf(o);
+    return `- ${u.id}: ${u.name} (${u.shape}), at x ${o.position.x.toFixed(2)} z ${o.position.z.toFixed(2)}, resting on ${on}`;
+  });
+  return lines.join("\n");
+}
+
+// ---------- Motion ----------
+let speed = 1.2, abortFlag = false;
+const sleepFrame = () => new Promise(r => requestAnimationFrame(r));
+class Stopped extends Error {}
+async function tween(fn, dur) {
+  const t0 = performance.now();
+  for (;;) {
+    if (abortFlag) throw new Stopped("Stopped");
+    const t = Math.min(1, (performance.now() - t0) / 1000 / dur);
+    fn(t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+    if (t >= 1) return;
+    await sleepFrame();
+  }
+}
+async function moveJoints(target, minDur = 0.35) {
+  const from = q.slice();
+  const delta = Math.max(...target.map((v, i) => Math.abs(v - from[i])));
+  const dur = Math.max(minDur, delta / (1.5 * speed));
+  await tween(s => { for (let i = 0; i < 6; i++) q[i] = from[i] + (target[i] - from[i]) * s; applyJoints(); }, dur);
+}
+async function moveTo(x, y, z, yaw, what = "that spot") {
+  const t = ik(x, y, z, yaw);
+  if (!t) throw new Error(`${what} is out of reach`);
+  await moveJoints(t);
+}
+async function setGrip(w) {
+  const from = grip;
+  await tween(s => { grip = from + (w - from) * s; applyJoints(); }, Math.max(0.2, Math.abs(w - from) / (0.12 * speed)));
+}
+async function settle(o, yRest) {
+  const y0 = o.position.y;
+  if (y0 - yRest < 0.001) { o.position.y = yRest; return; }
+  await tween(s => { o.position.y = y0 + (yRest - y0) * s * s; }, Math.sqrt(2 * (y0 - yRest) / 9.8) + 0.05);
+}
+
+// ---------- Action executor ----------
+const nameOf = id => objs[id]?.userData.name || binById[id]?.name || id;
+function resolveTarget(t) {
+  if (typeof t !== "string") return null;
+  t = t.toLowerCase().trim().replace(/\s+/g, "_");
+  if (objs[t]) return { kind: "object", id: t };
+  if (binById[t]) return { kind: "bin", id: t };
+  if (t === "middle") t = "center";
+  if (SPOTS[t]) return { kind: "spot", id: t };
+  return null;
+}
+function labelAction(a) {
+  switch (a.type) {
+    case "pick": return `pick ${nameOf(a.object)}`;
+    case "place": { const r = resolveTarget(a.target); return r?.kind === "spot" ? `place at ${r.id}` : r?.kind === "object" ? `stack on ${nameOf(r.id)}` : `place in ${nameOf(r?.id ?? a.target)}`; }
+    case "point": return `point at ${nameOf(a.object)}`;
+    case "gripper": return `${a.state} gripper`;
+    default: return a.type;
+  }
+}
+async function exec(a) {
+  const SAFE = 0.22;
+  if (a.type === "home") { await moveJoints(HOME); return; }
+  if (a.type === "gripper") { if (held) throw new Error(`still holding the ${held.userData.name}`); await setGrip(a.state === "close" ? 0.01 : GRIP_MAX); return; }
+  if (a.type === "wave") {
+    const up = [q[0], 1.35, -0.9, 0, 0.2, 0];
+    await moveJoints(up);
+    for (let i = 0; i < 3; i++) { await moveJoints([q[0] + 0.0, 1.35, -0.9, 0.5, 0.55, 0], 0.3); await moveJoints([q[0], 1.35, -0.9, -0.5, -0.15, 0], 0.3); }
+    await moveJoints(HOME); return;
+  }
+  if (a.type === "point") {
+    const o = objs[a.object]; if (!o) throw new Error(`no object called "${a.object}"`);
+    if (o === held) throw new Error("that object is in the gripper");
+    if (!held) await setGrip(0.012);
+    await moveTo(o.position.x, top(o) + 0.08, o.position.z, 0, `The ${o.userData.name}`);
+    await tween(() => {}, 0.6 / speed);
+    await moveTo(o.position.x, top(o) + 0.16, o.position.z, 0, `The ${o.userData.name}`);
+    if (!held) await setGrip(GRIP_MAX);
+    return;
+  }
+  if (a.type === "pick") {
+    const o = objs[a.object]; if (!o) throw new Error(`no object called "${a.object}"`);
+    if (held === o) return;
+    if (held) throw new Error(`already holding the ${held.userData.name}; place it first`);
+    const blockers = onTopOf(o);
+    if (blockers.length) throw new Error(`the ${blockers[0].userData.name} is on top of it`);
+    const { x, y, z } = o.position, yaw = yawOf(o), u = o.userData;
+    const hover = Math.max(y + 0.13, top(o) + 0.1);
+    await Promise.all([setGrip(GRIP_MAX), moveTo(x, hover, z, yaw, `The ${u.name}`)]);
+    await moveTo(x, y + 0.004, z, yaw, `The ${u.name}`);
+    await setGrip(u.width - 0.001);
+    J[5].attach(o); held = o;
+    await moveTo(x, Math.max(hover, SAFE), z, yaw, `The ${u.name}`);
+    return;
+  }
+  if (a.type === "place") {
+    if (!held) throw new Error("the gripper is empty; pick something first");
+    const r = resolveTarget(a.target); if (!r) throw new Error(`unknown place "${a.target}"`);
+    const o = held, u = o.userData;
+    let x, z, yRest;
+    if (r.kind === "object") {
+      const t = objs[r.id];
+      if (t === o) throw new Error("can't place an object on itself");
+      if (t.userData.shape === "ball") throw new Error(`nothing stays on top of the ${t.userData.name}`);
+      if (onTopOf(t).length) throw new Error(`the ${t.userData.name} already has something on it`);
+      x = t.position.x; z = t.position.z; yRest = top(t);
+    } else if (r.kind === "bin") {
+      const b = binById[r.id], n = inBin(r.id).length;
+      const slots = [[-0.04, -0.04], [0.04, 0.04], [-0.04, 0.04], [0.04, -0.04], [0, 0]];
+      const s = slots[n % slots.length];
+      x = b.x + s[0]; z = b.z + s[1]; yRest = restHeight(x, z, o);
+    } else {
+      [x, z] = freeSpot(...SPOTS[r.id], o); yRest = restHeight(x, z, o);
+    }
+    const yaw = yawOf(o), yc = yRest + u.half;
+    const what = r.kind === "spot" ? `The ${r.id} spot` : `The ${nameOf(r.id)}`;
+    await moveTo(x, Math.max(yc + 0.14, SAFE), z, yaw, what);
+    await moveTo(x, yc + 0.006, z, yaw, what);
+    await setGrip(Math.min(GRIP_MAX, u.width + 0.02));
+    scene.attach(o); held = null;
+    o.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), yawOf(o));
+    await Promise.all([settle(o, yc), moveTo(x, Math.max(yc + 0.14, SAFE), z, yaw, what)]);
+    return;
+  }
+  throw new Error(`unknown action "${a.type}"`);
+}
+
+// ---------- Built-in language parser ----------
+const COLOR_WORDS = ["red", "blue", "green", "yellow", "purple", "violet"];
+const SHAPE_WORDS = { cube: "cube", cubes: "cube", block: "cube", blocks: "cube", box: "cube", cylinder: "cylinder", cylinders: "cylinder", can: "cylinder", tube: "cylinder", ball: "ball", balls: "ball", sphere: "ball", orb: "ball" };
+const BIN_WORDS = /\b(bin|bins|basket|tray|box|container|bucket)\b/;
+function findObjects(seg) {
+  const words = seg.match(/[a-z]+/g) || [];
+  const found = [];
+  words.forEach((w, i) => {
+    const c = w === "violet" ? "purple" : w;
+    if (COLOR_WORDS.includes(w)) {
+      const shapeNext = SHAPE_WORDS[words[i + 1]];
+      if (shapeNext === "cube" && BIN_WORDS.test(" " + words[i + 1] + " ") && words[i + 1] === "box") {/* "red box" = cube */}
+      const o = Object.values(objs).find(o => o.userData.color === c);
+      if (o && !found.includes(o.userData.id)) found.push(o.userData.id);
+    }
+  });
+  if (found.length) return found;
+  for (const w of words) {
+    const s = SHAPE_WORDS[w];
+    if (s) { const m = Object.values(objs).filter(o => o.userData.shape === s); if (m.length) return [m[0].userData.id]; }
+  }
+  return [];
+}
+function parseTarget(seg) {
+  if (BIN_WORDS.test(seg) && !/\b(red|blue|green|yellow|purple)\s+box\b/.test(seg)) {
+    if (/\bright\b/.test(seg) || /\b(brown|orange|tan)\b/.test(seg)) return "right_bin";
+    return "left_bin";
+  }
+  const o = findObjects(seg); if (o.length) return o[0];
+  for (const s of ["left", "right", "center", "middle", "front", "back"]) if (new RegExp("\\b" + s + "\\b").test(seg)) return s === "middle" ? "center" : s;
+  return null;
+}
+function localParse(text) {
+  const t = " " + text.toLowerCase().replace(/[“”"']/g, "") + " ";
+  const actions = [];
+  let last = held ? held.userData.id : null, holding = last;
+  const pickPlace = (id, target) => { if (holding !== id) { if (holding) actions.push({ type: "place", target: "center" }); actions.push({ type: "pick", object: id }); } actions.push({ type: "place", target }); holding = null; last = id; };
+
+  if (/\b(sort|tidy|clean up|organi[sz]e)\b/.test(t)) {
+    for (const o of Object.values(objs)) pickPlace(o.userData.id, o.userData.shape === "cube" ? "left_bin" : "right_bin");
+    return { reply: "Sorting: cubes go to the left bin, everything else to the right bin.", actions };
+  }
+  const clauses = t.split(/\b(?:and then|then|after that|afterwards|next|finally)\b|[.;!?]|,|\band\b(?=\s+(?:pick|put|place|move|drop|stack|grab|take|lift|wave|point|go|return|open|close|set)\b)/).map(s => s && s.trim()).filter(Boolean);
+  for (const c of clauses) {
+    if (/\b(wave|say hi|hello|greet)\b/.test(c)) { actions.push({ type: "wave" }); continue; }
+    if (/\b(go home|home|rest|ready pose|return)\b/.test(c) && !/\bpick|put|place\b/.test(c)) { if (holding) { actions.push({ type: "place", target: "center" }); holding = null; } actions.push({ type: "home" }); continue; }
+    if (/\b(point|show me|where is|wheres|find|look at)\b/.test(c)) { const o = findObjects(c); if (o[0]) { actions.push({ type: "point", object: o[0] }); last = o[0]; } continue; }
+    if (/\b(open)\b.*\b(gripper|hand|claw)\b/.test(c)) { actions.push({ type: "gripper", state: "open" }); continue; }
+    if (/\b(close)\b.*\b(gripper|hand|claw)\b/.test(c)) { actions.push({ type: "gripper", state: "close" }); continue; }
+    const m = c.match(/\b(into|in|inside|onto|on top of|on|to|over|at)\b/);
+    const objPart = m ? c.slice(0, m.index) : c;
+    const tgtPart = m ? c.slice(m.index) : "";
+    let ids;
+    const all = /\b(all|every|everything|each)\b/.test(objPart);
+    if (all) {
+      const s = (objPart.match(/[a-z]+/g) || []).map(w => SHAPE_WORDS[w]).find(Boolean);
+      const colors = findObjects(objPart).filter(id => /\b(red|blue|green|yellow|purple)\b/.test(objPart));
+      ids = colors.length ? colors : Object.values(objs).filter(o => !s || o.userData.shape === s).map(o => o.userData.id);
+    } else {
+      ids = findObjects(objPart);
+      if (!ids.length && /\b(it|that|this|them)\b/.test(objPart) && last) ids = [last];
+    }
+    const target = tgtPart ? parseTarget(tgtPart) : null;
+    const isPick = /\b(pick|grab|take|lift|get|hold|raise|grasp)\b/.test(c);
+    const isPlace = /\b(put|place|move|drop|stack|set|transfer|bring|throw|toss|release)\b/.test(c) || (isPick && target);
+    if (isPlace && target) {
+      if (!ids.length && holding) ids = [holding];
+      ids = ids.filter(id => id !== target);
+      if (!ids.length) continue;
+      for (const id of ids) pickPlace(id, target);
+    } else if (isPick && ids.length) {
+      if (holding && holding !== ids[0]) { actions.push({ type: "place", target: "center" }); }
+      actions.push({ type: "pick", object: ids[0] }); holding = last = ids[0];
+    } else if (/\b(drop|release|let go|put (it )?down)\b/.test(c) && holding) {
+      actions.push({ type: "place", target: "center" }); holding = null;
+    }
+  }
+  if (!actions.length) return { reply: "I couldn't map that to an action. Try naming an object by colour, like “put the blue cube in the right bin”.", actions };
+  return { reply: `Planned ${actions.length} step${actions.length > 1 ? "s" : ""}.`, actions };
+}
+
+// ---------- Claude interpreter (when the viewer allows it) ----------
+let sample = null, sampleOff = false;
+(async () => {
+  try { sample = window.claude ? await window.claude.use("sample") : null; } catch { sample = null; }
+  updateBrainPill();
+})();
+function usingClaude() { return !!sample && !sampleOff && brainSel.value === "auto"; }
+function updateBrainPill() {
+  document.getElementById("brainTxt").textContent = usingClaude() ? "Claude interpreter" : "Built-in parser";
+}
+async function claudeParse(text) {
+  const prompt = `You control "Astra 6", a 6-axis robot arm with a parallel two-finger gripper, in a tabletop simulation. Turn the operator's instruction into an action plan.
+
+Scene (meters; robot base at origin; +x is away from the robot; the operator stands in front of the robot facing it, so the operator's left is +z and right is -z):
+${describeScene()}
+Containers: left_bin (operator's left, x 0.17 z 0.43), right_bin (operator's right, x 0.17 z -0.43). Both bins can hold several objects.
+Named table spots: left, right, center, front, back.
+Gripper currently holds: ${held ? held.userData.id : "nothing"}.
+
+Actions, run in order:
+{"type":"pick","object":"<object id>"}   grasp and lift. Gripper must be empty and nothing may sit on top of the object.
+{"type":"place","target":"<bin id | object id to stack on | spot name>"}   set down the held object. Nothing can be stacked on the purple_ball, and an object can carry only one thing on top.
+{"type":"point","object":"<object id>"}   hover over an object to show where it is
+{"type":"wave"}
+{"type":"home"}
+{"type":"gripper","state":"open"|"close"}   only when empty-handed
+
+Rules: moving something is pick then place. To reach an object that has something on top, move the top object first. Use only ids listed above. If the request is ambiguous or impossible, return an empty action list and ask a short question in "reply". Otherwise "reply" is one short sentence describing what you will do, in the operator's language.
+
+Reply with only JSON: {"reply": "...", "actions": [ ... ]}
+
+Operator instruction: ${text}`;
+  const res = await sample.json(prompt, { modelTier: "quick", cache: false, signal: ctl?.signal });
+  if (!res || !Array.isArray(res.actions)) throw { code: "invalid_json" };
+  return { reply: String(res.reply || ""), actions: res.actions.filter(a => a && typeof a.type === "string") };
+}
+
+// ---------- UI ----------
+const $ = id => document.getElementById(id);
+const logEl = $("log"), form = $("form"), input = $("cmd"), runBtn = $("btnRun"), stopBtn = $("btnStop"), brainSel = $("brain");
+const jgrid = $("jgrid");
+const jOut = [];
+for (let i = 0; i < 6; i++) { const d = document.createElement("div"); d.className = "j"; d.innerHTML = `<i>J${i + 1}</i><output>0</output>`; jgrid.append(d); jOut.push(d.querySelector("output")); }
+const gD = document.createElement("div"); gD.className = "j grip"; gD.innerHTML = `<i>GRIP mm</i><output>0</output>`; jgrid.append(gD); const gOut = gD.querySelector("output");
+function updateReadout() { for (let i = 0; i < 6; i++) jOut[i].textContent = (q[i] * 180 / Math.PI).toFixed(0); gOut.textContent = (grip * 1000).toFixed(0); }
+
+const EXAMPLES = ["Put the red cube in the left bin", "Stack the blue cube on the green cube", "Put all the cubes in the right bin", "Point at the purple ball", "Sort everything", "Wave hello"];
+for (const e of EXAMPLES) { const b = document.createElement("button"); b.type = "button"; b.className = "chip"; b.textContent = e; b.onclick = () => { input.value = e; form.requestSubmit(); }; $("chips").append(b); }
+
+function addMsg(kind, who, text, meta) {
+  $("emptyNote")?.remove();
+  const m = document.createElement("div"); m.className = "msg " + kind;
+  const w = document.createElement("div"); w.className = "who"; w.textContent = who;
+  if (meta) { const em = document.createElement("em"); em.textContent = meta; w.append(em); }
+  const t = document.createElement("div"); t.className = "text"; t.textContent = text;
+  m.append(w, t); logEl.append(m); logEl.scrollTop = logEl.scrollHeight;
+  return m;
+}
+function setBusy(b, label) {
+  runBtn.disabled = b; stopBtn.disabled = !b;
+  $("statePill").className = "pill state " + (b ? "run" : "idle");
+  $("stateTxt").textContent = b ? (label || "Running") : "Idle";
+}
+let ctl = null, busy = false;
+form.addEventListener("submit", async e => {
+  e.preventDefault();
+  const text = input.value.trim(); if (!text || busy) return;
+  input.value = ""; busy = true; abortFlag = false;
+  addMsg("user", "You", text);
+  let plan, via;
+  if (usingClaude()) {
+    setBusy(true, "Thinking");
+    const thinking = addMsg("bot", "Astra 6", "Thinking…", "via Claude");
+    ctl = new AbortController();
+    try { plan = await claudeParse(text); via = "via Claude"; }
+    catch (err) {
+      if (err?.code === "cancelled") { thinking.querySelector(".text").textContent = "Stopped."; busy = false; setBusy(false); return; }
+      if (["not_granted", "sampling_disabled", "not_declared", "capability_disabled", "capability_removed"].includes(err?.code)) { sampleOff = true; updateBrainPill(); }
+      plan = localParse(text); via = "via built-in parser (Claude unavailable)";
+    }
+    thinking.remove();
+  } else { plan = localParse(text); via = "via built-in parser"; }
+  const m = addMsg("bot", "Astra 6", plan.reply || "Running the plan.", via);
+  if (plan.actions.length) {
+    const ol = document.createElement("ol"); ol.className = "plan";
+    const items = plan.actions.map(a => { const li = document.createElement("li"); li.textContent = labelAction(a); ol.append(li); return li; });
+    m.append(ol); logEl.scrollTop = logEl.scrollHeight;
+    setBusy(true, "Running");
+    for (let i = 0; i < plan.actions.length; i++) {
+      items[i].className = "run";
+      try { await exec(plan.actions[i]); items[i].className = "done"; }
+      catch (err) {
+        items[i].className = "fail";
+        const s = document.createElement("small"); s.textContent = err instanceof Stopped ? "Stopped by operator" : capital(err.message); items[i].append(s);
+        break;
+      }
+    }
+  }
+  logEl.scrollTop = logEl.scrollHeight;
+  busy = false; setBusy(false); input.focus();
+});
+const capital = s => s.charAt(0).toUpperCase() + s.slice(1) + ".";
+input.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); } });
+stopBtn.onclick = () => { abortFlag = true; ctl?.abort(); };
+brainSel.onchange = updateBrainPill;
+$("speed").oninput = e => { speed = +e.target.value; };
+$("btnReset").onclick = () => { if (busy) return; resetScene(); q = HOME.slice(); grip = GRIP_MAX; applyJoints(); };
+$("btnShuffle").onclick = () => { if (busy) return; shuffleScene(); };
+let showLabels = true;
+$("btnLabels").onclick = e => { showLabels = !showLabels; e.currentTarget.setAttribute("aria-pressed", showLabels); labelsEl.hidden = !showLabels; };
+
+// labels
+const labelsEl = $("labels");
+const tags = {};
+for (const o of [...Object.values(objs), ...BINS.map(b => b.group)]) {
+  const d = document.createElement("div"); d.className = "tag"; d.textContent = o.userData.name; labelsEl.append(d); tags[o.userData.id] = { el: d, o };
+}
+const tmpV = new THREE.Vector3();
+function updateLabels(w, h) {
+  if (!showLabels) return;
+  for (const id in tags) {
+    const { el, o } = tags[id];
+    o.getWorldPosition(tmpV);
+    tmpV.y += o.userData.kind === "bin" ? BIN_WALL + 0.02 : o.userData.half + 0.02;
+    tmpV.project(camera);
+    el.style.left = ((tmpV.x + 1) / 2 * w) + "px";
+    el.style.top = ((1 - tmpV.y) / 2 * h) + "px";
+    el.classList.toggle("held", o === held);
+  }
+}
+
+// ---------- Render loop ----------
+const camframe = $("camframe");
+let W = 1, Hh = 1;
+function resize() {
+  W = stage.clientWidth; Hh = stage.clientHeight;
+  renderer.setSize(W, Hh, false);
+  camera.aspect = W / Hh; camera.updateProjectionMatrix();
+  const cw = Math.round(Math.min(260, Math.max(130, W * 0.26))), ch = Math.round(cw * 0.75);
+  camframe.style.width = cw + "px"; camframe.style.height = ch + "px";
+  camframe.dataset.w = cw; camframe.dataset.h = ch;
+}
+new ResizeObserver(resize).observe(stage); resize();
+function frame() {
+  controls.update();
+  renderer.setScissorTest(false);
+  renderer.setViewport(0, 0, W, Hh);
+  renderer.render(scene, camera);
+  const cw = +camframe.dataset.w, ch = +camframe.dataset.h;
+  renderer.setScissorTest(true);
+  renderer.setScissor(W - cw - 12, 12, cw, ch); renderer.setViewport(W - cw - 12, 12, cw, ch);
+  renderer.render(scene, wristCam);
+  updateLabels(W, Hh); updateReadout();
+  requestAnimationFrame(frame);
+}
+frame();
+})();
+</script>

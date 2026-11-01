@@ -1,0 +1,13 @@
+# secrets
+.env
+# local environment and caches
+.venv/
+__pycache__/
+*.pyc
+MUJOCO_LOG.TXT
+.claude/
+.DS_Store
+# only the Panda model and its licence are needed from MuJoCo Menagerie
+vendor/menagerie/*
+!vendor/menagerie/LICENSE
+!vendor/menagerie/franka_emika_panda/

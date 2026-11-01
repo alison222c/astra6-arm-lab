@@ -1,0 +1,7 @@
+mujoco>=3.2
+numpy
+fastapi
+uvicorn[standard]
+anthropic>=2.3
+openai>=1.40
+pillow>=10

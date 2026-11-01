@@ -1,0 +1,562 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Astra 6 Arm Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one-screen workcell — MuJoCo stage on the left, teach-pendant panel on the right. */
+:root {
+  --bg: #e9ecef; --surface: #f8f9fb; --sunken: #dfe3e8; --fg: #1a2027; --muted: #5a6470; --line: #cdd3da;
+  --accent: #d98200; --accent-ink: #1a1200; --ok: #2b8a57; --bad: #c0392b;
+  --stage: #d6dbe1; --floor: #c3c8ce;
+  --display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --bg: #12161b; --surface: #191e25; --sunken: #0f1317; --fg: #e4e8ec; --muted: #8b95a2; --line: #2a313a;
+  --accent: #f0a23a; --ok: #4fbf84; --bad: #ef6b5b; --stage: #1a1f26; --floor: #2c333b; color-scheme: dark } }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; overflow: hidden; }
+.app { height: 100%; display: grid; grid-template-rows: auto 1fr; }
+header { display: flex; align-items: center; gap: 14px; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.brand { font-family: var(--display); font-weight: 700; font-size: 22px; letter-spacing: .02em; text-transform: uppercase; display: flex; align-items: baseline; gap: 8px; }
+.brand b { color: var(--accent); }
+.brand small { font-family: var(--mono); font-size: 11px; font-weight: 400; color: var(--muted); letter-spacing: 0; text-transform: none; }
+.status { margin-left: auto; display: flex; gap: 8px; align-items: center; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); white-space: nowrap; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.pill.run .dot { background: var(--accent); animation: blink 1s infinite; }
+.pill.idle .dot { background: var(--ok); }
+.pill.off .dot { background: var(--bad); }
+@keyframes blink { 50% { opacity: .25 } }
+
+main { display: grid; grid-template-columns: minmax(0, 1fr) 410px; min-height: 0; }
+.stage { position: relative; min-height: 0; background: var(--stage); overflow: hidden; }
+.stage canvas { display: block; width: 100%; height: 100%; outline: none; }
+.labels { position: absolute; inset: 0; pointer-events: none; }
+.tag { position: absolute; transform: translate(-50%, -100%); font-family: var(--mono); font-size: 11px; padding: 2px 6px; border-radius: 4px; background: color-mix(in srgb, var(--surface) 85%, transparent); color: var(--fg); border: 1px solid var(--line); white-space: nowrap; }
+.tag.held { border-color: var(--accent); color: var(--accent); }
+.camframe { position: absolute; right: 12px; bottom: 12px; border: 1px solid var(--line); border-radius: 6px; pointer-events: none; }
+.camframe span, .hud { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; color: #fff; background: rgba(0,0,0,.45); padding: 1px 5px; border-radius: 3px; }
+.camframe span { position: absolute; left: 6px; top: 4px; }
+.hud { position: absolute; left: 12px; bottom: 12px; font-size: 11px; letter-spacing: 0; padding: 4px 8px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+.stage-tools { position: absolute; left: 12px; top: 12px; display: flex; gap: 6px; flex-wrap: wrap; }
+
+.panel { display: grid; grid-template-rows: auto auto 1fr auto; min-height: 0; border-left: 1px solid var(--line); background: var(--surface); }
+.section-h { font-family: var(--display); font-weight: 600; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.joints { padding: 12px 16px; border-bottom: 1px solid var(--line); display: grid; gap: 8px; }
+.jgrid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 5px; }
+.j { background: var(--sunken); border-radius: 6px; padding: 6px 2px 5px; text-align: center; }
+.j i { display: block; font-style: normal; font-family: var(--display); font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .06em; }
+.j output { font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+.tabs { display: flex; border-bottom: 1px solid var(--line); }
+.tab { flex: 1; font: 600 14px var(--display); letter-spacing: .1em; text-transform: uppercase; padding: 10px; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted); cursor: pointer; }
+.tab[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); }
+.pane { min-height: 0; display: grid; grid-template-rows: 1fr auto; }
+
+.log { overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.msg { display: grid; gap: 6px; min-width: 0; }
+.msg .who { font-family: var(--display); font-size: 12px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); display: flex; gap: 8px; align-items: baseline; }
+.msg .who em { font-style: normal; font-family: var(--mono); font-size: 10px; letter-spacing: 0; text-transform: none; }
+.msg.user .text { background: var(--fg); color: var(--surface); padding: 8px 11px; border-radius: 10px 10px 2px 10px; justify-self: end; max-width: 90%; }
+.msg.user .who { justify-content: flex-end; }
+.msg.bot .text { line-height: 1.45; }
+.msg.err .text { color: var(--bad); }
+.why summary { font: 600 11px var(--display); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); cursor: pointer; }
+.why p { margin: 4px 0 0; font-size: 13px; line-height: 1.45; color: var(--muted); }
+.plan { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.plan li { display: grid; grid-template-columns: 18px 1fr; gap: 8px; align-items: start; font-family: var(--mono); font-size: 12.5px; padding: 6px 8px; border-radius: 6px; background: var(--sunken); color: var(--muted); }
+.plan li::before { content: "○"; text-align: center; }
+.plan li.run { color: var(--fg); outline: 1px solid var(--accent); }
+.plan li.run::before { content: "▸"; color: var(--accent); }
+.plan li.done { color: var(--fg); }
+.plan li.done::before { content: "✓"; color: var(--ok); }
+.plan li.fail { color: var(--bad); }
+.plan li.fail::before { content: "✕"; }
+.plan li small { display: block; font-size: 11.5px; margin-top: 2px; }
+.empty { color: var(--muted); font-size: 14px; line-height: 1.5; }
+
+.cmd { border-top: 1px solid var(--line); padding: 12px 16px 14px; display: grid; gap: 10px; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { font: 500 12.5px var(--body); color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; cursor: pointer; }
+.chip:hover { border-color: var(--accent); }
+form { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+textarea, input[type=text] { font: 15px/1.4 var(--body); color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; }
+textarea { resize: none; min-height: 44px; }
+input[type=text] { font: 13px var(--mono); padding: 5px 8px; border-radius: 6px; min-width: 0; }
+textarea:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.btn { font: 600 14px var(--display); letter-spacing: .08em; text-transform: uppercase; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); padding: 0 14px; cursor: pointer; min-height: 36px; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.stop { color: var(--bad); }
+.btn:disabled { opacity: .45; cursor: default; }
+.brain { display: grid; grid-template-columns: auto 1fr; gap: 6px 8px; align-items: center; font-size: 13px; color: var(--muted); }
+.brain .note { grid-column: 1 / -1; font-size: 12px; }
+.brain .note.bad { color: var(--bad); }
+select { font: 13px var(--body); color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; }
+input[type=range] { accent-color: var(--accent); }
+.stage-tools .btn { background: color-mix(in srgb, var(--surface) 88%, transparent); min-height: 30px; font-size: 13px; padding: 0 10px; }
+
+.drive { padding: 16px; display: grid; gap: 16px; align-content: start; overflow-y: auto; }
+.drive p { margin: 0; color: var(--muted); line-height: 1.5; font-size: 14px; }
+.keys { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.kgroup { display: grid; gap: 6px; }
+.kgroup .section-h { font-size: 12px; }
+.krow { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
+kbd { font: 500 13px var(--mono); min-width: 32px; height: 32px; padding: 0 8px; display: inline-grid; place-items: center; border: 1px solid var(--line); border-bottom-width: 3px; border-radius: 6px; background: var(--bg); color: var(--fg); transition: background .08s, transform .08s; }
+kbd.wide { min-width: 96px; }
+kbd.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); transform: translateY(1px); }
+.krow span { font-size: 13px; color: var(--muted); }
+.drive-state { font-family: var(--mono); font-size: 12px; padding: 8px 10px; border-radius: 6px; background: var(--sunken); }
+.drive-state.live { outline: 1px solid var(--accent); }
+.speed { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); }
+
+.vision { padding: 14px 16px; display: grid; gap: 12px; align-content: start; overflow-y: auto; }
+.vision p { margin: 0; color: var(--muted); line-height: 1.5; font-size: 13.5px; }
+.feed { position: relative; border-radius: 6px; overflow: hidden; background: var(--sunken); aspect-ratio: 4 / 3; }
+.feed img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.feed span { position: absolute; left: 6px; top: 6px; font: 10px var(--mono); letter-spacing: .08em; color: #fff; background: rgba(0,0,0,.45); padding: 1px 5px; border-radius: 3px; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { font: 600 13px var(--display); letter-spacing: .08em; text-transform: uppercase; padding: 7px 6px; border: 0; background: var(--bg); color: var(--muted); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.seg button:disabled { cursor: default; opacity: .6; }
+.dets { width: 100%; border-collapse: collapse; font: 12px var(--mono); font-variant-numeric: tabular-nums; }
+.dets th { font: 600 11px var(--display); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); text-align: right; padding: 0 4px 4px; }
+.dets th:first-child, .dets td:first-child { text-align: left; }
+.dets td { text-align: right; padding: 4px; border-top: 1px solid var(--line); }
+.dets td.miss { color: var(--bad); }
+.pill.vis .dot { background: var(--ok); }
+.pill.tru .dot { background: var(--accent); }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand"><span>Astra <b>6</b> Arm Lab</span><small>MuJoCo · Franka Panda · real-time physics</small></div>
+    <div class="status">
+      <span class="pill" id="simPill"><span class="dot"></span><span id="simTxt">Connecting…</span></span>
+      <span class="pill vis" id="sensePill" title="What the robot acts on"><span class="dot"></span><span id="senseTxt">Vision</span></span>
+      <span class="pill idle" id="statePill"><span class="dot"></span><span id="stateTxt">Idle</span></span>
+    </div>
+  </header>
+  <main>
+    <div class="stage" id="stage">
+      <canvas id="cv" tabindex="0"></canvas>
+      <div class="labels" id="labels"></div>
+      <div class="camframe" id="camframe"><span>WRIST CAM</span></div>
+      <div class="hud" id="hud">t 0.00 s</div>
+      <div class="stage-tools">
+        <button class="btn" id="btnReset" type="button">Reset scene</button>
+        <button class="btn" id="btnShuffle" type="button">Shuffle</button>
+        <button class="btn" id="btnHome" type="button">Home</button>
+        <button class="btn" id="btnLabels" type="button" aria-pressed="true">Labels</button>
+      </div>
+    </div>
+    <aside class="panel">
+      <div class="joints">
+        <div class="section-h">Joint state (deg) · gripper (mm)</div>
+        <div class="jgrid" id="jgrid"></div>
+      </div>
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" id="tabChat" aria-selected="true" aria-controls="paneChat">Language</button>
+        <button class="tab" role="tab" id="tabDrive" aria-selected="false" aria-controls="paneDrive">Keyboard</button>
+        <button class="tab" role="tab" id="tabVision" aria-selected="false" aria-controls="paneVision">Camera</button>
+      </div>
+      <section class="pane" id="paneChat" role="tabpanel">
+        <div class="log" id="log" aria-live="polite">
+          <div class="empty" id="emptyNote">Tell Astra 6 what to do. It sees the table through an RGB-D camera, plans pick, place, stack and point actions, and the controller carries them out with real contacts and friction, so a grasp can slip. Drag to orbit, scroll to zoom.</div>
+        </div>
+        <div class="cmd">
+          <div class="chips" id="chips"></div>
+          <form id="form">
+            <textarea id="cmd" rows="2" placeholder="e.g. Put the red cube in the left bin"></textarea>
+            <div style="display:grid;gap:6px">
+              <button class="btn primary" id="btnRun" type="submit">Run</button>
+              <button class="btn stop" id="btnStop" type="button" disabled>Stop</button>
+            </div>
+          </form>
+          <div class="brain">
+            <label for="provider">Astra 6 runs on</label>
+            <select id="provider"><option value="claude">Claude (Anthropic API)</option><option value="openai">OpenAI-compatible API</option></select>
+            <label for="model">Model</label>
+            <input type="text" id="model" spellcheck="false">
+            <label for="baseUrl" id="baseUrlLabel" hidden>Base URL</label>
+            <input type="text" id="baseUrl" spellcheck="false" placeholder="https://api.openai.com/v1" hidden>
+            <div class="note" id="keyNote"></div>
+          </div>
+        </div>
+      </section>
+      <section class="pane" id="paneDrive" role="tabpanel" hidden>
+        <div class="drive">
+          <p>Click the 3D view or this panel, then drive the gripper with the keys. Directions follow the camera, so W always moves away from you on screen. Touching a key stops any running plan.</p>
+          <div class="keys">
+            <div class="kgroup"><div class="section-h">Move</div>
+              <div class="krow"><kbd data-k="w">W</kbd><span>away</span></div>
+              <div class="krow"><kbd data-k="a">A</kbd><kbd data-k="s">S</kbd><kbd data-k="d">D</kbd><span>left · toward · right</span></div>
+            </div>
+            <div class="kgroup"><div class="section-h">Height</div>
+              <div class="krow"><kbd data-k="r">R</kbd><span>up</span></div>
+              <div class="krow"><kbd data-k="f">F</kbd><span>down</span></div>
+            </div>
+            <div class="kgroup"><div class="section-h">Wrist</div>
+              <div class="krow"><kbd data-k="q">Q</kbd><kbd data-k="e">E</kbd><span>rotate</span></div>
+            </div>
+            <div class="kgroup"><div class="section-h">Gripper</div>
+              <div class="krow"><kbd data-k=" " class="wide">Space</kbd><span>open / close</span></div>
+              <div class="krow"><kbd data-k="h">H</kbd><span>home</span></div>
+            </div>
+          </div>
+          <div class="drive-state" id="driveState">Keyboard idle · gripper open</div>
+          <label class="speed" for="speed">Speed <input id="speed" type="range" min="0.4" max="2.5" step="0.1" value="1"></label>
+        </div>
+      </section>
+      <section class="pane" id="paneVision" role="tabpanel" hidden>
+        <div class="vision">
+          <p>The robot finds objects with this RGB-D camera: colour picks out each object's pixels, depth turns them into 3D points, and each object's known shape is fitted to its points. Astra 6 gets this image and the estimated positions, not the simulator's.</p>
+          <div class="feed"><img id="feed" alt="Robot camera view with a labelled box on each detected object"><span>SCENE CAM · RGB-D</span></div>
+          <div class="section-h">Robot acts on</div>
+          <div class="seg" role="group" aria-label="Robot acts on">
+            <button type="button" id="senseVision" aria-pressed="true">Camera estimates</button>
+            <button type="button" id="senseTruth" aria-pressed="false">Simulator truth</button>
+          </div>
+          <table class="dets" aria-label="Detected objects">
+            <thead><tr><th>Object</th><th>x</th><th>y</th><th>z</th><th>error</th></tr></thead>
+            <tbody id="detRows"></tbody>
+          </table>
+          <p>Error is the distance from the estimate to the simulator's true pose. It is shown here to grade the camera and is never given to the robot.</p>
+        </div>
+      </section>
+    </aside>
+  </main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+// ---------- Three.js stage (MuJoCo is z-up) ----------
+THREE.Object3D.DefaultUp.set(0, 0, 1);
+const stage = $("stage"), canvas = $("cv");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(css("--stage"));
+const camera = new THREE.PerspectiveCamera(42, 1, 0.01, 30);
+camera.position.set(-0.5, -0.78, 1.45);
+const controls = new THREE.OrbitControls(camera, canvas);
+controls.target.set(0.44, 0.02, 0.04);
+controls.enableDamping = true;
+controls.maxPolarAngle = Math.PI * 0.49;
+controls.minDistance = 0.4; controls.maxDistance = 4;
+scene.add(new THREE.HemisphereLight(0xffffff, 0x556070, 0.7));
+const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+sun.position.set(0.8, 0.6, 2.2); sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -1.2, right: 1.2, top: 1.2, bottom: -1.2, near: 0.5, far: 6 });
+scene.add(sun);
+const ring = new THREE.Mesh(new THREE.RingGeometry(0.855, 0.86, 128, 1, -Math.PI * 0.6, Math.PI * 1.2),
+  new THREE.MeshBasicMaterial({ color: new THREE.Color(css("--accent")), transparent: true, opacity: 0.55 }));
+ring.position.z = 0.001; scene.add(ring);
+const wristCam = new THREE.PerspectiveCamera(70, 4 / 3, 0.005, 5);
+wristCam.matrixAutoUpdate = false;
+const wristOffset = new THREE.Matrix4().makeRotationX(Math.PI).setPosition(0.055, 0, 0.03);
+
+let geomMeshes = [], objectNames = {}, binNames = {}, tags = {};
+const b64f = s => { const b = atob(s), a = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return new Float32Array(a.buffer); };
+function buildScene(msg) {
+  geomMeshes.forEach(m => scene.remove(m)); geomMeshes = [];
+  objectNames = msg.objects; binNames = msg.bins;
+  for (const g of msg.geoms) {
+    let geo;
+    const [s0, s1, s2] = g.size;
+    switch (g.type) {
+      case 0: geo = new THREE.PlaneGeometry(2 * (s0 || 5), 2 * (s1 || 5)); break;
+      case 2: geo = new THREE.SphereGeometry(s0, 32, 20); break;
+      case 3: geo = new THREE.CylinderGeometry(s0, s0, 2 * s1 + 2 * s0, 24).rotateX(Math.PI / 2); break;
+      case 5: geo = new THREE.CylinderGeometry(s0, s0, 2 * s1, 32).rotateX(Math.PI / 2); break;
+      case 6: geo = new THREE.BoxGeometry(2 * s0, 2 * s1, 2 * s2); break;
+      case 7: geo = new THREE.BufferGeometry();
+        geo.setAttribute("position", new THREE.BufferAttribute(b64f(g.pos), 3));
+        geo.setAttribute("normal", new THREE.BufferAttribute(b64f(g.nrm), 3)); break;
+      default: geo = new THREE.SphereGeometry(0.01);
+    }
+    const color = g.type === 0 ? new THREE.Color(css("--floor")) : new THREE.Color(g.rgba[0], g.rgba[1], g.rgba[2]).convertSRGBToLinear();
+    const mat = new THREE.MeshStandardMaterial({ color, roughness: g.type === 7 ? 0.35 : 0.55, metalness: g.type === 7 ? 0.05 : 0, transparent: g.rgba[3] < 1, opacity: g.rgba[3] });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.matrixAutoUpdate = false; mesh.castShadow = g.type !== 0; mesh.receiveShadow = true;
+    mesh.userData.body = g.body;
+    scene.add(mesh); geomMeshes.push(mesh);
+  }
+  // labels: one per object / bin, anchored to its first geom
+  $("labels").innerHTML = ""; tags = {};
+  const names = { ...objectNames, ...binNames };
+  for (const mesh of geomMeshes) {
+    const b = mesh.userData.body;
+    if (names[b] && !tags[b]) { const el = document.createElement("div"); el.className = "tag"; el.textContent = names[b]; $("labels").append(el); tags[b] = { el, mesh, bin: !!binNames[b] }; }
+  }
+}
+const handMatrix = new THREE.Matrix4();
+function applyFrame(buf) {
+  const f = new Float32Array(buf);
+  const n = geomMeshes.length;
+  if (f.length < (n + 1) * 12) return;
+  for (let i = 0; i <= n; i++) {
+    const o = i * 12, m = f;
+    const M = i < n ? geomMeshes[i].matrix : handMatrix;
+    M.set(m[o + 3], m[o + 4], m[o + 5], m[o], m[o + 6], m[o + 7], m[o + 8], m[o + 1], m[o + 9], m[o + 10], m[o + 11], m[o + 2], 0, 0, 0, 1);
+    if (i < n) geomMeshes[i].matrixWorldNeedsUpdate = true;
+  }
+  wristCam.matrix.multiplyMatrices(handMatrix, wristOffset);
+  wristCam.matrixWorldNeedsUpdate = true;
+}
+
+// ---------- labels & rendering ----------
+let showLabels = true, held = null;
+const tmp = new THREE.Vector3();
+function updateLabels(w, h) {
+  if (!showLabels) return;
+  for (const id in tags) {
+    const { el, mesh, bin } = tags[id];
+    tmp.setFromMatrixPosition(mesh.matrix); tmp.z += bin ? 0.07 : 0.045;
+    tmp.project(camera);
+    el.style.left = ((tmp.x + 1) / 2 * w) + "px"; el.style.top = ((1 - tmp.y) / 2 * h) + "px";
+    el.hidden = tmp.z > 1;
+    el.classList.toggle("held", id === held);
+  }
+}
+const camframe = $("camframe");
+let W = 1, H = 1, CW = 200, CH = 150;
+function resize() {
+  W = stage.clientWidth; H = stage.clientHeight;
+  renderer.setSize(W, H, false);
+  camera.aspect = W / H; camera.updateProjectionMatrix();
+  CW = Math.round(Math.min(280, Math.max(140, W * 0.26))); CH = Math.round(CW * 0.75);
+  camframe.style.width = CW + "px"; camframe.style.height = CH + "px";
+}
+new ResizeObserver(resize).observe(stage); resize();
+(function frame() {
+  controls.update();
+  renderer.setScissorTest(false); renderer.setViewport(0, 0, W, H);
+  renderer.render(scene, camera);
+  renderer.setScissorTest(true);
+  renderer.setScissor(W - CW - 12, 12, CW, CH); renderer.setViewport(W - CW - 12, 12, CW, CH);
+  renderer.render(scene, wristCam);
+  updateLabels(W, H);
+  requestAnimationFrame(frame);
+})();
+
+// ---------- connection ----------
+let ws, providers = null;
+function send(o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); }
+function connect() {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.binaryType = "arraybuffer";
+  ws.onopen = () => setSim("Simulation live", "idle");
+  ws.onclose = () => { setSim("Server offline · retrying", "off"); setTimeout(connect, 1500); };
+  ws.onmessage = ev => {
+    if (typeof ev.data !== "string") { applyFrame(ev.data); return; }
+    const m = JSON.parse(ev.data);
+    if (m.kind === "scene") buildScene(m);
+    else if (m.kind === "providers") { providers = m; syncProvider(); }
+    else if (m.kind === "status") onStatus(m);
+    else if (m.kind === "thinking") onThinking(m);
+    else if (m.kind === "plan") onPlan(m);
+    else if (m.kind === "step") onStep(m);
+    else if (m.kind === "error") onError(m);
+    else if (m.kind === "vision") onVision(m);
+  };
+}
+function setSim(t, cls) { $("simTxt").textContent = t; $("simPill").className = "pill " + cls; }
+
+// ---------- status ----------
+const jOut = [];
+for (let i = 0; i < 8; i++) { const d = document.createElement("div"); d.className = "j"; d.innerHTML = `<i>${i < 7 ? "J" + (i + 1) : "GRIP"}</i><output>–</output>`; $("jgrid").append(d); jOut.push(d.querySelector("output")); }
+let busy = false, gripOpen = true;
+function onStatus(s) {
+  const truth = s.sense === "truth";
+  $("sensePill").className = "pill " + (truth ? "tru" : "vis");
+  $("senseTxt").textContent = truth ? "Sim truth" : "Vision";
+  $("senseVision").setAttribute("aria-pressed", !truth); $("senseTruth").setAttribute("aria-pressed", truth);
+  $("senseVision").disabled = $("senseTruth").disabled = s.busy;
+  s.q.forEach((v, i) => jOut[i].textContent = (v * 180 / Math.PI).toFixed(0));
+  jOut[7].textContent = s.grip.toFixed(0);
+  held = s.held;
+  $("hud").textContent = `t ${s.time.toFixed(2)} s · tcp ${s.tcp.map(v => v.toFixed(3)).join(" ")} · ${held ? "holding " + (objectNames[held] || held) : "gripper empty"}`;
+  setBusy(s.busy);
+}
+function setBusy(b) {
+  busy = b; $("btnRun").disabled = b; $("btnStop").disabled = !b;
+  if (!thinking) { $("statePill").className = "pill " + (b ? "run" : "idle"); $("stateTxt").textContent = b ? "Running plan" : "Idle"; }
+}
+
+// ---------- chat ----------
+const logEl = $("log");
+function addMsg(kind, who, text, meta) {
+  $("emptyNote")?.remove();
+  const m = document.createElement("div"); m.className = "msg " + kind;
+  const w = document.createElement("div"); w.className = "who"; w.textContent = who;
+  if (meta) { const em = document.createElement("em"); em.textContent = meta; w.append(em); }
+  const t = document.createElement("div"); t.className = "text"; t.textContent = text;
+  m.append(w, t); logEl.append(m); logEl.scrollTop = logEl.scrollHeight;
+  return m;
+}
+let thinking = null, planItems = [];
+function onThinking(m) {
+  thinking = addMsg("bot", "Astra 6", "Thinking…", "via " + m.via);
+  $("statePill").className = "pill run"; $("stateTxt").textContent = "Thinking";
+}
+function label(a) {
+  const n = id => objectNames[id] || binNames[id] || id;
+  switch (a.type) {
+    case "pick": return `pick ${n(a.object)}`;
+    case "place": return objectNames[a.target] ? `stack on ${n(a.target)}` : binNames[a.target] ? `place in ${n(a.target)}` : `place at ${a.target}`;
+    case "point": return `point at ${n(a.object)}`;
+    case "gripper": return `${a.state} gripper`;
+    default: return a.type;
+  }
+}
+function onPlan(m) {
+  thinking?.remove(); thinking = null;
+  const msg = addMsg("bot", "Astra 6", m.reply || "Running the plan.", "via " + m.via);
+  planItems = [];
+  if (m.reasoning) {
+    const d = document.createElement("details"); d.className = "why";
+    const s = document.createElement("summary"); s.textContent = "Reasoning";
+    const p = document.createElement("p"); p.textContent = m.reasoning;
+    d.append(s, p); msg.append(d);
+  }
+  if (m.actions.length) {
+    const ol = document.createElement("ol"); ol.className = "plan";
+    planItems = m.actions.map(a => { const li = document.createElement("li"); li.textContent = label(a); ol.append(li); return li; });
+    msg.append(ol);
+  }
+  logEl.scrollTop = logEl.scrollHeight;
+}
+function onStep(m) {
+  const li = planItems[m.i]; if (!li) return;
+  li.className = m.state;
+  if (m.error) { const s = document.createElement("small"); s.textContent = m.error; li.append(s); }
+  logEl.scrollTop = logEl.scrollHeight;
+}
+function onError(m) {
+  thinking?.remove(); thinking = null;
+  addMsg("bot err", "Astra 6", m.message);
+  setBusy(busy);
+}
+const EXAMPLES = ["Put the red cube in the left bin", "Stack the blue cube on the green cube", "Put every cube in the right bin", "Point at the purple ball", "Wave hello"];
+for (const e of EXAMPLES) { const b = document.createElement("button"); b.type = "button"; b.className = "chip"; b.textContent = e; b.onclick = () => { $("cmd").value = e; $("form").requestSubmit(); }; $("chips").append(b); }
+$("form").addEventListener("submit", e => {
+  e.preventDefault();
+  const text = $("cmd").value.trim(); if (!text || busy || thinking) return;
+  $("cmd").value = "";
+  addMsg("user", "You", text);
+  const provider = $("provider").value;
+  send({ type: "command", text, provider, model: $("model").value.trim(), base_url: provider === "openai" ? $("baseUrl").value.trim() : "" });
+});
+$("cmd").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("form").requestSubmit(); } });
+$("btnStop").onclick = () => send({ type: "stop" });
+
+// provider settings (remembered per browser)
+const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+$("provider").value = store.get("astra.provider") || "claude";
+function syncProvider() {
+  const p = $("provider").value, openai = p === "openai";
+  $("baseUrl").hidden = $("baseUrlLabel").hidden = !openai;
+  const info = providers?.[p];
+  $("model").placeholder = info?.default_model || "";
+  $("model").value = store.get("astra.model." + p) || "";
+  if (openai) $("baseUrl").value = store.get("astra.base") || info?.base_url || "";
+  const note = $("keyNote");
+  if (!info) { note.textContent = ""; return; }
+  note.className = "note" + (info.configured ? "" : " bad");
+  note.textContent = info.configured ? `API key found on the server. Leave the model empty to use ${info.default_model}.`
+    : p === "claude" ? "No ANTHROPIC_API_KEY in .env. It will still work if you have run `ant auth login`."
+    : "No OPENAI_API_KEY in .env. Add it and restart the server.";
+}
+$("provider").onchange = () => { store.set("astra.provider", $("provider").value); syncProvider(); };
+$("model").onchange = () => store.set("astra.model." + $("provider").value, $("model").value.trim());
+$("baseUrl").onchange = () => store.set("astra.base", $("baseUrl").value.trim());
+syncProvider();
+
+// ---------- tabs ----------
+function selectTab(name) {
+  for (const t of ["Chat", "Drive", "Vision"]) {
+    $("tab" + t).setAttribute("aria-selected", t === name);
+    $("pane" + t).hidden = t !== name;
+  }
+  if (name === "Drive") canvas.focus();
+}
+$("tabChat").onclick = () => selectTab("Chat");
+$("tabDrive").onclick = () => selectTab("Drive");
+$("tabVision").onclick = () => selectTab("Vision");
+
+// ---------- camera ----------
+function onVision(v) {
+  $("feed").src = "data:image/jpeg;base64," + v.jpg;
+  const rows = v.dets.map(d => `<tr><td>${d.id.replace("_", " ")}</td><td>${d.p[0].toFixed(3)}</td><td>${d.p[1].toFixed(3)}</td><td>${d.p[2].toFixed(3)}</td><td>${d.err_mm.toFixed(1)} mm</td></tr>`);
+  for (const id of v.missing) rows.push(`<tr><td>${id.replace("_", " ")}</td><td colspan="4" class="miss">not visible</td></tr>`);
+  $("detRows").innerHTML = rows.join("");
+}
+function setSense(value) { send({ type: "sense", value }); }
+$("senseVision").onclick = () => setSense("vision");
+$("senseTruth").onclick = () => setSense("truth");
+
+// ---------- keyboard teleop ----------
+const down = new Set();
+const typing = () => /^(TEXTAREA|INPUT|SELECT)$/.test(document.activeElement?.tagName);
+function teleopVector() {
+  const f = new THREE.Vector3().subVectors(controls.target, camera.position); f.z = 0; f.normalize();
+  const r = new THREE.Vector3(f.y, -f.x, 0);
+  const k = c => down.has(c) ? 1 : 0;
+  const v = f.multiplyScalar(k("w") - k("s")).add(r.multiplyScalar(k("d") - k("a")));
+  return { v: [v.x, v.y, k("r") - k("f")], w: k("q") - k("e") };
+}
+let lastSent = "";
+function pushTeleop(force) {
+  const t = teleopVector(), s = JSON.stringify(t);
+  if (s !== lastSent || force) { send({ type: "teleop", ...t }); lastSent = s; }
+  const moving = t.v.some(x => x) || t.w;
+  $("driveState").classList.toggle("live", !!moving);
+  $("driveState").textContent = `${moving ? "Driving" : "Keyboard idle"} · gripper ${gripOpen ? "open" : "closed"}`;
+}
+setInterval(() => { if (down.size) pushTeleop(true); }, 150); // re-aim while the camera orbits
+const KEYS = new Set(["w", "a", "s", "d", "r", "f", "q", "e"]);
+function keyCap(k, on) { document.querySelectorAll(`kbd[data-k="${k === " " ? " " : k}"]`).forEach(el => el.classList.toggle("on", on)); }
+addEventListener("keydown", e => {
+  if (typing() || e.metaKey || e.ctrlKey) return;
+  const k = e.key.toLowerCase();
+  if (KEYS.has(k)) { e.preventDefault(); if (!down.has(k)) { down.add(k); keyCap(k, true); pushTeleop(); } }
+  else if (k === " " && !e.repeat) { e.preventDefault(); gripOpen = !gripOpen; send({ type: "grip", open: gripOpen }); keyCap(" ", true); pushTeleop(true); }
+  else if (k === "h" && !e.repeat) { send({ type: "home" }); keyCap("h", true); }
+});
+addEventListener("keyup", e => {
+  const k = e.key.toLowerCase();
+  if (KEYS.has(k)) { down.delete(k); keyCap(k, false); pushTeleop(); }
+  else if (k === " " || k === "h") keyCap(k, false);
+});
+addEventListener("blur", () => { down.clear(); document.querySelectorAll("kbd.on").forEach(el => el.classList.remove("on")); pushTeleop(true); });
+
+// ---------- tools ----------
+$("btnReset").onclick = () => { send({ type: "reset" }); gripOpen = true; };
+$("btnShuffle").onclick = () => { send({ type: "shuffle" }); gripOpen = true; };
+$("btnHome").onclick = () => send({ type: "home" });
+$("btnLabels").onclick = e => { showLabels = !showLabels; e.currentTarget.setAttribute("aria-pressed", showLabels); $("labels").hidden = !showLabels; };
+$("speed").oninput = e => send({ type: "speed", value: +e.target.value });
+
+connect();
+})();
+</script>
+</body>
+</html>
